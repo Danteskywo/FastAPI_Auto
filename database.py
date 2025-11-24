@@ -29,7 +29,7 @@ class Auto(Base):
 
     sales = relationship("Sale", back_populates="car")
 
-class Sale(Base):
+class Sold(Base):
     __tablename__ = "sales"
 
     id = Column(Integer, primary_key=True)

@@ -1,11 +1,27 @@
 from fastapi import FastAPI, Depends, Body, HTTPException
 from fastapi.responses import Response, JSONResponse, FileResponse
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
-from datebase import *
+from database import *
+from managers import CarManager, SaleManager
 
+
+class SaleResponse(BaseModel):
+    id : int
+    car_id : int
+    brand : str
+    model : str
+    year : int
+    color : str
+    sale_price : float
+    customer_name : str
+    customer_phone : str
+    sale_date: datetime
+
+    class Config:
+        from_attributes = True
 
 class SaleCreate(BaseModel):
     car_id : int
@@ -84,48 +100,95 @@ def main():
 def get_cars(db: Session = Depends(get_db)):
     return db.query(Auto).all()
 
+@app.get("/api/cars/available")
+def get_available_cars(db: Session = Depends(get_db)):
+    car_manager = CarManager(db)
+    return car_manager.get_available_cars()
+
+
 @app.get("/api/cars/{id}")
 def get_car(id: int, db:Session = Depends(get_db)):
-    car = db.query(Auto).filter(Auto.id == id).first()
-    if car == None:
-        return HTTPException(status_code=404, content={"message":"Автомобиль не найден"})
+    car_manager = CarManager(db)
+    car = car_manager.get_car_by_id(id)
+    if car is None:
+        raise HTTPException(status_code=404, detail="Автомобиль не найден!")
     return car
 
 @app.post("/api/cars")
 def create_car(data: CarCreate, db: Session = Depends(get_db)):
+    car_manager = CarManager(db)
+    try:
+        return car_manager.add_arrived_car(data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/cars/{id}")
+def edit_car(id: int, data: CarUpdate, db: Session = Depends(get_db)):
+    car = db.query(Auto).filter(Auto.id == id).first()
+    if car is None:
+        raise HTTPException(status_code=404, detail="Автомобиль не найден")
     
-    existing_car = db.query(Auto).filter(Auto.vin == data.vin).first()
-    if existing_car:
-        raise HTTPException(status_code=400, detail="Автомобиль с таким VIN уже существует")
+    if data.vin != car.vin:
+        existing_car = db.query(Auto).filter(Auto.vin == data.vin).first()
+        if existing_car:
+            raise HTTPException(status_code=400, detail="Автомобиль с таким VIN уже существует")
     
-    car = Auto(
-        brand=data.brand,
-        model=data.model,
-        year=data.year,
-        color=data.color,
-        price=data.price,
-        milage=data.milage,
-        vin=data.vin,
-        available=data.available
-    )
-    db.add(car)
+    car.brand = data.brand
+    car.model = data.model
+    car.year = data.year
+    car.color = data.color
+    car.price = data.price
+    car.milage = data.milage
+    car.vin = data.vin
+    car.available = data.available
+    
     db.commit()
     db.refresh(car)
     return car
+    
+@app.delete("/api/cars/{id}")
+def delete_car(id: int, db: Session = Depends(get_db)):
+    car = db.query(Auto).filter(Auto.id == id).first()
+    if car is None:
+        return JSONResponse(status_code=404, content={"message": "Автомобиль не найден"})
+    db.delete(car)
+    db.commit()
+    return car
 
-@app.post("/api/sales")
-def create_sale(sale_data: SaleCreate, db: Session = Depends(get_db)):
+@app.post("/api/sales", response_model=SaleResponse)
+def create_sale(data: SaleCreate, db: Session = Depends(get_db)):
     sale_manager = SaleManager(db)
     try:
-        sale = sale_manager.sell_car(sale_data)
-        return sale 
-    except ValueError as e : 
-        raise HTTPException(status_code=404, detail=str(e))
+        customer_data = {
+            'customer_name': data.customer_name,
+            'customer_phone': data.customer_phone
+        }
+        sale = sale_manager.sell_car(data.car_id, customer_data)
+        return sale
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/sales")
+@app.get("/api/sales", response_model=List[SaleResponse])
 def get_sales(db: Session = Depends(get_db)):
-    return db.query(Sale).all()
+    sale_manager = SaleManager(db)
+    return sale_manager.get_sales_history()
 
+@app.get("/api/sales/{id}", response_model=SaleResponse)
+def get_sale(id: int, db: Session = Depends(get_db)):
+    sale_manager = SaleManager(db)
+    sale = sale_manager.get_sale_by_id(id)
+    if sale is None:
+        raise HTTPException(status_code=404, detail="Продажа не найдена")
+    return sale
+
+@app.patch("/api/cars/{id}/status")
+def update_car_status(id: int, available: bool, db: Session = Depends(get_db)):
+    """Обновление статуса автомобиля (доступен/продан)"""
+    car_manager = CarManager(db)
+    success = car_manager.update_car_status(id, available)
+    if not success:
+        raise HTTPException(status_code=404, detail="Автомобиль не найден")
+    return {"message": "Статус автомобиля обновлен"}
 
 @app.put("/api/cars/{id}")
 def edit_car(id: int, data: CarUpdate, db: Session = Depends(get_db)):
