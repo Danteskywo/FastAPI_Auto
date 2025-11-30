@@ -12,6 +12,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread
  
  
 class Base(DeclarativeBase): pass
+
 class Auto(Base):
     __tablename__ = "cars"
  
@@ -27,7 +28,7 @@ class Auto(Base):
     available = Column(Boolean, default=True)
     created_data = Column(DateTime, default=func.now())
 
-    sales = relationship("Sale", back_populates="car")
+    sales = relationship("Sold", back_populates="car")
 
 class Sold(Base):
     __tablename__ = "sales"
@@ -45,5 +46,6 @@ class Sold(Base):
     created_at = Column(DateTime, default=func.now())
     
     car = relationship("Auto", back_populates="sales")
-
+    
+Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(autoflush=False, bind=engine)

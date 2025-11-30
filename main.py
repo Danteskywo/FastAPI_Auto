@@ -6,81 +6,82 @@ from pydantic import BaseModel
 from datetime import datetime
 from database import *
 from managers import CarManager, SaleManager
+from models import CarCreate, CarUpdate, SaleCreate, SaleResponse
 
 
-class SaleResponse(BaseModel):
-    id : int
-    car_id : int
-    brand : str
-    model : str
-    year : int
-    color : str
-    sale_price : float
-    customer_name : str
-    customer_phone : str
-    sale_date: datetime
+# class SaleResponse(BaseModel):
+#     id : int
+#     car_id : int
+#     brand : str
+#     model : str
+#     year : int
+#     color : str
+#     sale_price : float
+#     customer_name : str
+#     customer_phone : str
+#     sale_date: datetime
 
-    class Config:
-        from_attributes = True
+#     class Config:
+#         from_attributes = True
 
-class SaleCreate(BaseModel):
-    car_id : int
-    customer_name : str
-    customer_phone : str
-    sale_price : Optional[float] = None
+# class SaleCreate(BaseModel):
+#     car_id : int
+#     customer_name : str
+#     customer_phone : str
+#     sale_price : Optional[float] = None
 
-class SaleManager:
-    def __init__(self, db : Session):
-        self.db = db 
+# class SaleManager:
+#     def __init__(self, db : Session):
+#         self.db = db 
         
-    def sell_car(self, sale_data : SaleCreate) -> Sale:
-        car = self.db.query(Auto).filter(Auto.id == sale_data.car_id).first()
-        if not car:
-            raise ValueError("Автомобиль не найден")
-        if not car.available:
-            raise ValueError("Автомобиль продан!")
+#     def sell_car(self, sale_data : SaleCreate) -> Sold:
+#         car = self.db.query(Auto).filter(Auto.id == sale_data.car_id).first()
+#         if not car:
+#             raise ValueError("Автомобиль не найден")
+#         if not car.available:
+#             raise ValueError("Автомобиль продан!")
         
-        sale_price = sale_data.sale_price if sale_data.sale_price is not None else car.price
+#         sale_price = sale_data.sale_price if sale_data.sale_price is not None else car.price
 
-        sale = Sale(
-            car_id = car.id,
-            brand=car.brand,
-            model=car.model,
-            year=car.year,
-            color=car.color,
-            sale_price=sale_price,
-            customer_name=sale_data.customer_name,
-            customer_phone=sale_data.customer_phone
-        )
-        car.available = False
+#         sale = Sold(
+#             car_id = car.id,
+#             brand=car.brand,
+#             model=car.model,
+#             year=car.year,
+#             color=car.color,
+#             sale_price=sale_price,
+#             customer_name=sale_data.customer_name,
+#             customer_phone=sale_data.customer_phone
+#         )
+#         car.available = False
 
-        self.db.add(sale)
-        self.db.commit()
-        self.db.refresh(sale)
+#         self.db.add(sale)
+#         self.db.commit()
+#         self.db.refresh(sale)
 
-        return sale
+#         return sale
 
-class CarCreate(BaseModel):
-    brand : str
-    model : str
-    year : int
-    color : str
-    price : float
-    milage: Optional[float] = 0.0
-    vin: str
-    available : Optional[bool] = True
+# class CarCreate(BaseModel):
+#     brand : str
+#     model : str
+#     year : int
+#     color : str
+#     price : float
+#     milage: Optional[float] = 0.0
+#     vin: str
+#     available : Optional[bool] = True
 
-class CarUpdate(BaseModel):
-    brand: str
-    model: str
-    year: int
-    color: str
-    price: float
-    milage: float
-    vin: str
-    available: bool
+# class CarUpdate(BaseModel):
+#     brand: str
+#     model: str
+#     year: int
+#     color: str
+#     price: float
+#     milage: float
+#     vin: str
+#     available: bool
 
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -183,7 +184,7 @@ def get_sale(id: int, db: Session = Depends(get_db)):
 
 @app.patch("/api/cars/{id}/status")
 def update_car_status(id: int, available: bool, db: Session = Depends(get_db)):
-    """Обновление статуса автомобиля (доступен/продан)"""
+    
     car_manager = CarManager(db)
     success = car_manager.update_car_status(id, available)
     if not success:
@@ -196,7 +197,7 @@ def edit_car(id: int, data: CarUpdate, db: Session = Depends(get_db)):
     if car is None:
         raise HTTPException(status_code=404, detail="Автомобиль не найден")
     
-    # Проверяем уникальность VIN (если изменился)
+    
     if data.vin != car.vin:
         existing_car = db.query(Auto).filter(Auto.vin == data.vin).first()
         if existing_car:
